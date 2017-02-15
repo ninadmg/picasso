@@ -35,7 +35,7 @@ public interface Downloader {
    * loading the bitmap.
    * @throws IOException if the requested URL cannot successfully be loaded.
    */
-  @Nullable Response load(@NonNull Uri uri, int networkPolicy) throws IOException;
+  @Nullable Response load(@NonNull Uri uri, int networkPolicy,String stableKey) throws IOException;
 
   /**
    * Allows to perform a clean up for this {@link Downloader} including closing the disk cache and

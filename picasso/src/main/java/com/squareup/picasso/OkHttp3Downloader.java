@@ -22,19 +22,20 @@ import android.support.annotation.VisibleForTesting;
 
 import java.io.File;
 import java.io.IOException;
+
 import okhttp3.Cache;
 import okhttp3.CacheControl;
 import okhttp3.Call;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.ResponseBody;
+import okhttp3.internal.Util;
 
 /** A {@link Downloader} which uses OkHttp to download images. */
 public final class OkHttp3Downloader implements Downloader {
   private final Call.Factory client;
-  private final Cache cache;
   private boolean sharedClient = true;
-
+  private CacheHelper helper;
   /**
    * Create new downloader that uses OkHttp. This will install an image cache into your application
    * cache directory.
@@ -71,8 +72,13 @@ public final class OkHttp3Downloader implements Downloader {
    * @param maxSize The size limit for the cache.
    */
   public OkHttp3Downloader(final File cacheDir, final long maxSize) {
-    this(new OkHttpClient.Builder().cache(new Cache(cacheDir, maxSize)).build());
+    this(new OkHttpClient.Builder().build());
     sharedClient = false;
+    try {
+      this.helper = new CacheHelper(cacheDir,maxSize);
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
   }
 
   /**
@@ -81,21 +87,29 @@ public final class OkHttp3Downloader implements Downloader {
    */
   public OkHttp3Downloader(OkHttpClient client) {
     this.client = client;
-    this.cache = client.cache();
+
   }
 
   /** Create a new downloader that uses the specified {@link Call.Factory} instance. */
   public OkHttp3Downloader(Call.Factory client) {
     this.client = client;
-    this.cache = null;
   }
 
   @VisibleForTesting Cache getCache() {
     return ((OkHttpClient) client).cache();
   }
 
-  @Override public Response load(@NonNull Uri uri, int networkPolicy) throws IOException {
+  @Override public Response load(@NonNull Uri uri, int networkPolicy,String stableKey) throws IOException {
     CacheControl cacheControl = null;
+
+    stableKey = Util.md5Hex(stableKey);
+    Response cacheResponse = helper.get(stableKey);
+
+    if(cacheResponse!=null)
+    {
+      return cacheResponse;
+    }
+
     if (networkPolicy != 0) {
       if (NetworkPolicy.isOfflineOnly(networkPolicy)) {
         cacheControl = CacheControl.FORCE_CACHE;
@@ -127,16 +141,22 @@ public final class OkHttp3Downloader implements Downloader {
     boolean fromCache = response.cacheResponse() != null;
 
     ResponseBody responseBody = response.body();
-    return new Response(responseBody.byteStream(), fromCache, responseBody.contentLength());
+    helper.put(responseBody.byteStream(),responseBody.contentLength(),stableKey);
+    cacheResponse = helper.get(stableKey);
+
+    if(cacheResponse!=null)
+    {
+      return cacheResponse;
+    }
+
+    return null;
   }
 
   @Override public void shutdown() {
-    if (!sharedClient) {
-      if (cache != null) {
-        try {
-          cache.close();
-        } catch (IOException ignored) {
-        }
+    if (helper != null) {
+      try {
+        helper.close();
+      } catch (IOException ignored) {
       }
     }
   }

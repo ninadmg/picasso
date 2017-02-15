@@ -44,7 +44,7 @@ class NetworkRequestHandler extends RequestHandler {
   }
 
   @Override @Nullable public Result load(Request request, int networkPolicy) throws IOException {
-    Response response = downloader.load(request.uri, request.networkPolicy);
+    Response response = downloader.load(request.uri, request.networkPolicy,request.stableKey);
     if (response == null) {
       return null;
     }
